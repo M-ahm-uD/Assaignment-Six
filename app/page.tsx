@@ -1,24 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Hero from "@/components/Hero";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
-import WorkoutCard from "@/components/WorkoutCard";
-import { getWorkouts, Workout } from "@/lib/api";
+import Hero from "../components/Hero";
+import WorkoutCard from "../components/WorkoutCard";
+import { getWorkouts, Workout } from "../lib/api";
 
-export default function Home() {
+export default function HomePage() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState("duration");
+  const [toast, setToast] = useState("");
 
   useEffect(() => {
     async function loadWorkouts() {
       try {
         const data = await getWorkouts();
         setWorkouts(data);
-      } catch (error) {
-        console.error(error);
+      } catch {
+        setToast("Could not load workouts.");
       } finally {
         setLoading(false);
       }
@@ -27,69 +25,48 @@ export default function Home() {
     loadWorkouts();
   }, []);
 
-  const sortedWorkouts = [...workouts].sort((a, b) => {
-    if (sortBy === "duration") {
-      return a.duration - b.duration;
-    }
+  useEffect(() => {
+    if (!toast) return;
 
-    if (sortBy === "calories") {
-      return a.caloriesBurned - b.caloriesBurned;
-    }
+    const timer = setTimeout(() => {
+      setToast("");
+    }, 2500);
 
-    if (sortBy === "rating") {
-      return b.rating - a.rating;
-    }
-
-    return 0;
-  });
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   return (
     <>
-      <Navbar />
+      <Hero />
 
-      <main>
-        <Hero />
-
-        <section id="library" className="library">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">WORKOUTS</p>
-              <h2>THE LIBRARY</h2>
-              <p>
-                Twelve lifts covering every major muscle group.
-              </p>
-            </div>
-
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="sort-select"
-            >
-              <option value="duration">Sort By: Duration</option>
-              <option value="calories">Sort By: Calories</option>
-              <option value="rating">Sort By: Rating</option>
-            </select>
+      <section id="library" className="library-section">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">WORKOUT LIBRARY</p>
+            <h2>THE LIBRARY</h2>
+            <p>
+              Twelve lifts covering every major muscle group.
+            </p>
           </div>
+        </div>
 
-          {loading ? (
-            <div className="loading">
-              <div className="spinner"></div>
-              <p>Loading workouts…</p>
-            </div>
-          ) : (
-            <div className="workout-grid">
-              {sortedWorkouts.map((workout) => (
-                <WorkoutCard
-                  key={workout.id}
-                  workout={workout}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-      </main>
+        {loading ? (
+          <div className="loading-box">
+            Loading workouts...
+          </div>
+        ) : (
+          <div className="workout-grid">
+            {workouts.map((workout) => (
+              <WorkoutCard
+                key={workout.id}
+                workout={workout}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
-      <Footer />
+      {toast && <div className="toast">{toast}</div>}
     </>
   );
 }

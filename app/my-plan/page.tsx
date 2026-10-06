@@ -1,286 +1,253 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import {
+  Check,
+  Clock3,
+  Flame,
+  Star,
+  Trash2,
+  Eye,
+} from "lucide-react";
+
+import { getWorkouts, Workout } from "../../lib/api";
 import {
   getPlan,
   getSaved,
-  savePlan,
-  saveSaved,
-} from "@/lib/storage";
-import { Workout } from "@/lib/api";
+  removeFromPlan,
+  markDone,
+} from "../../lib/storage";
 
 type Tab = "plan" | "saved";
+type SortType = "duration" | "calories" | "rating";
 
 export default function MyPlanPage() {
   const [plan, setPlan] = useState<Workout[]>([]);
   const [saved, setSaved] = useState<Workout[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("plan");
-  const [message, setMessage] = useState("");
+  const [sortBy, setSortBy] = useState<SortType>("duration");
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState("");
 
   useEffect(() => {
-    setPlan(getPlan());
-    setSaved(getSaved());
+    async function load() {
+      try {
+        await getWorkouts();
+        setPlan(getPlan());
+        setSaved(getSaved());
+      } finally {
+        setLoading(false);
+      }
+    }
 
-    setTimeout(() => {
-      setLoading(false);
-    }, 300);
+    load();
+
+    const update = () => {
+      setPlan(getPlan());
+      setSaved(getSaved());
+    };
+
+    window.addEventListener("fitlog-storage", update);
+
+    return () => {
+      window.removeEventListener("fitlog-storage", update);
+    };
   }, []);
 
-  function showToast(text: string) {
-    setMessage(text);
+  const currentList = activeTab === "plan" ? plan : saved;
 
-    setTimeout(() => {
-      setMessage("");
-    }, 2500);
-  }
+  const sortedList = useMemo(() => {
+    return [...currentList].sort((a, b) => {
+      if (sortBy === "calories") {
+        return b.calories - a.calories;
+      }
 
-  function removeWorkout(id: number) {
-    const updatedPlan = plan.filter(
-      (workout) => workout.id !== id
-    );
+      if (sortBy === "rating") {
+        return b.rating - a.rating;
+      }
 
-    setPlan(updatedPlan);
-    savePlan(updatedPlan);
-
-    window.dispatchEvent(new Event("fitlog-update"));
-
-    showToast("Workout removed");
-  }
-
-  function markAsDone(id: number) {
-    const workout = plan.find(
-      (item) => item.id === id
-    );
-
-    if (!workout) return;
-
-    const updatedPlan = plan.filter(
-      (item) => item.id !== id
-    );
-
-    setPlan(updatedPlan);
-    savePlan(updatedPlan);
-
-    window.dispatchEvent(new Event("fitlog-update"));
-
-    showToast(`${workout.name} marked as done`);
-  }
-
-  function removeSaved(id: number) {
-    const updatedSaved = saved.filter(
-      (workout) => workout.id !== id
-    );
-
-    setSaved(updatedSaved);
-    saveSaved(updatedSaved);
-
-    window.dispatchEvent(new Event("fitlog-update"));
-
-    showToast("Workout removed from saved");
-  }
-
-  const currentList =
-    activeTab === "plan" ? plan : saved;
+      return b.duration - a.duration;
+    });
+  }, [currentList, sortBy]);
 
   const totalMinutes = plan.reduce(
-    (total, workout) => total + workout.duration,
+    (sum, item) => sum + item.duration,
     0
   );
 
   const totalCalories = plan.reduce(
-    (total, workout) =>
-      total + workout.caloriesBurned,
+    (sum, item) => sum + item.calories,
     0
   );
 
-  if (loading) {
-    return (
-      <>
-        <Navbar />
+  function handleRemove(id: number) {
+    removeFromPlan(id);
 
-        <div className="loading-page">
-          <div className="spinner"></div>
-          <p>Loading workouts…</p>
-        </div>
+    setPlan(getPlan());
+    setToast("Workout removed.");
 
-        <Footer />
-      </>
-    );
+    setTimeout(() => setToast(""), 2500);
+  }
+
+  function handleDone() {
+    markDone();
+
+    setToast("Workout marked as done.");
+
+    setTimeout(() => setToast(""), 2500);
   }
 
   return (
-    <>
-      <Navbar />
-
-      <main className="my-plan-page">
-        <section className="plan-header">
+    <section className="plan-page">
+      <div className="plan-container">
+        <div className="plan-heading">
           <div>
-            <p className="eyebrow">
-              YOUR WORKOUT LOG
-            </p>
+            <p className="eyebrow">YOUR WORKOUTS</p>
 
             <h1>MY PLAN</h1>
 
             <p>
-              Cap of five lifts for today. Finish them,
-              then load more.
+              Cap of five lifts for today. Finish them, then load more.
             </p>
           </div>
-        </section>
 
-        <section className="metrics">
+          <select
+            className="sort-select"
+            value={sortBy}
+            onChange={(e) =>
+              setSortBy(e.target.value as SortType)
+            }
+          >
+            <option value="duration">Duration</option>
+            <option value="calories">Calories</option>
+            <option value="rating">Rating</option>
+          </select>
+        </div>
+
+        <div className="metrics">
           <div className="metric-card">
-            <span>EXERCISES</span>
+            <span>Exercises</span>
             <strong>{plan.length}</strong>
           </div>
 
           <div className="metric-card">
-            <span>MINUTES</span>
+            <span>Minutes</span>
             <strong>{totalMinutes}</strong>
           </div>
 
           <div className="metric-card">
-            <span>CALORIES</span>
+            <span>Calories</span>
             <strong>{totalCalories}</strong>
           </div>
-        </section>
+        </div>
 
-        <div className="plan-tabs">
+        <div className="tabs">
           <button
+            className={activeTab === "plan" ? "active" : ""}
             onClick={() => setActiveTab("plan")}
-            className={
-              activeTab === "plan"
-                ? "tab active"
-                : "tab"
-            }
           >
-            Today&apos;s Plan{" "}
-            <span>{plan.length}</span>
+            Today's Plan
           </button>
 
           <button
+            className={activeTab === "saved" ? "active" : ""}
             onClick={() => setActiveTab("saved")}
-            className={
-              activeTab === "saved"
-                ? "tab active"
-                : "tab"
-            }
           >
-            Saved <span>{saved.length}</span>
+            Saved
           </button>
         </div>
 
-        <section className="plan-list">
-          {currentList.length === 0 ? (
-            <div className="empty-state">
-              <p className="eyebrow">
-                NOTHING HERE YET
-              </p>
+        {loading ? (
+          <div className="loading-box">
+            Loading workouts...
+          </div>
+        ) : sortedList.length === 0 ? (
+          <div className="empty-state">
+            <h2>NOTHING HERE YET</h2>
 
-              <h2>YOUR LIST IS EMPTY</h2>
+            <p>
+              Browse the library and add a lift to get today moving.
+            </p>
 
-              <p>
-                Browse the library and add a lift to
-                get today moving.
-              </p>
-
-              <Link
-                href="/"
-                className="primary-btn"
-              >
-                GO TO WORKOUTS →
-              </Link>
-            </div>
-          ) : (
-            currentList.map((workout) => (
-              <article
-                key={workout.id}
-                className="plan-card"
-              >
+            <Link href="/" className="primary-btn">
+              Go to workouts
+            </Link>
+          </div>
+        ) : (
+          <div className="plan-list">
+            {sortedList.map((workout) => (
+              <article className="plan-card" key={workout.id}>
                 <img
                   src={workout.image}
                   alt={workout.name}
                 />
 
                 <div className="plan-card-content">
-                  <div className="tags">
-                    {workout.muscleGroups.map(
-                      (group) => (
-                        <span key={group}>
-                          {group}
-                        </span>
-                      )
-                    )}
-                  </div>
+                  <span className="category">
+                    {workout.category}
+                  </span>
 
-                  <h2>{workout.name}</h2>
+                  <h3>{workout.name}</h3>
 
-                  <p className="equipment">
-                    {workout.equipment}
-                  </p>
+                  <p>{workout.equipment}</p>
 
                   <div className="stats">
                     <span>
-                      ◷ {workout.duration} min
+                      <Clock3 size={15} />
+                      {workout.duration} min
                     </span>
 
                     <span>
-                      🔥 {workout.caloriesBurned} kcal
+                      <Flame size={15} />
+                      {workout.calories} kcal
                     </span>
 
                     <span>
-                      ★ {workout.rating}
+                      <Star size={15} />
+                      {workout.rating}
                     </span>
                   </div>
-                </div>
 
-                <div className="plan-actions">
-                  <Link
-                    href={`/workout/${workout.id}`}
-                    className="secondary-btn"
-                  >
-                    VIEW DETAILS
-                  </Link>
-
-                  {activeTab === "plan" && (
-                    <button
-                      onClick={() =>
-                        markAsDone(workout.id)
-                      }
-                      className="done-btn"
+                  <div className="plan-actions">
+                    <Link
+                      href={`/workout/${workout.id}`}
+                      className="secondary-btn"
                     >
-                      ✓ MARK AS DONE
-                    </button>
-                  )}
+                      <Eye size={16} />
+                      View Details
+                    </Link>
 
-                  <button
-                    onClick={() =>
-                      activeTab === "plan"
-                        ? removeWorkout(workout.id)
-                        : removeSaved(workout.id)
-                    }
-                    className="remove-btn"
-                  >
-                    ×
-                  </button>
+                    {activeTab === "plan" && (
+                      <>
+                        <button
+                          className="success-btn"
+                          onClick={handleDone}
+                        >
+                          <Check size={16} />
+                          Mark as Done
+                        </button>
+
+                        <button
+                          className="danger-btn"
+                          onClick={() =>
+                            handleRemove(workout.id)
+                          }
+                        >
+                          <Trash2 size={16} />
+                          Remove
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </article>
-            ))
-          )}
-        </section>
-      </main>
+            ))}
+          </div>
+        )}
+      </div>
 
-      <Footer />
-
-      {message && (
-        <div className="toast">
-          {message}
-        </div>
-      )}
-    </>
+      {toast && <div className="toast">{toast}</div>}
+    </section>
   );
 }
